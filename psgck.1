@@ -1,0 +1,63 @@
+.Dd August 3, 2016
+.Dt PSGCK 1
+.Sh NAME
+.Nm psgck
+.Nd check passwd, shadow and group validity
+.Sh SYNOPSIS
+.Nm
+.Op Fl v
+.Op Fl n Ar name-regex
+.Op Fl p Ar passwd file
+.Op Fl g Ar group file
+.Op Fl s Ar shadow file
+.Sh DESCRIPTION
+.Nm
+performs verification of the passwd, shadow and group files, similar to
+.Xr pwck 8
+and
+.Xr grpck 8 .
+But never changes any of the databases.
+
+.Sh OPTIONS
+.Bl -tag -width Ds
+.It Fl v
+Increase verbosity, and report non-errors. May be given multiple times.
+.It Fl p g s
+Use provided files instead of default files in
+.Pa /etc .
+.It Fl n Ar name-regex
+Use 
+.Ar name-regex
+to match valid user and group names, instead of the default
+.Pa ^[a-z][0-9a-z]*$ .
+Be sure to include
+.Pa ^
+and
+.Pa $ .
+
+.Sh AUTHOR
+Written by Lars Lindqvist.
+.Sh COPYRIGHT
+Copyright (C) 2016 Lars Lindqvist
+.Sh LICENSE
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+.Sh WARRANTY
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+.Sh SEE ALSE
+.Xr pwck 8 ,
+.Xr grpck 8 .
