@@ -52,27 +52,36 @@ struct checker {
 	size_t id_tok;
 	const char *path;
 	struct entry *head;
+	bool (*checker1)(char**);
+	bool (*checker2)(char**);
 };
 
+enum pass { PASS_FIRST, PASS_SECOND };
 enum { GR_NAME = 0, GR_PASSWD, GR_GID, GR_USERS, GR_LAST };
 enum { PW_NAME = 0, PW_PASSWD, PW_UID, PW_GID, PW_COMMENT, PW_HOME, PW_SHELL, PW_LAST };
 enum { SP_NAME = 0, SP_PASSWD, SP_CHANGED, SP_MIN, SP_MAX, SP_WARN, SP_INACT, SP_EXPIRE, SP_RESERVED, SP_LAST };
 
+static bool check_group(char**);
+static bool check_group2(char**);
+static bool check_shadow(char**);
+static bool check_shadow2(char**);
+static bool check_passwd(char**);
+static bool check_passwd2(char**);
+
 static struct checker pwdck = {
-	PW_LAST, PW_NAME, PW_UID, default_passwd_file, NULL
+	PW_LAST, PW_NAME, PW_UID, default_passwd_file, NULL, check_passwd, check_passwd2
 };
 
 static struct checker grpck = {
-	GR_LAST, GR_NAME, GR_GID, default_group_file, NULL
+	GR_LAST, GR_NAME, GR_GID, default_group_file, NULL, check_group, check_group2
 };
 
 static struct checker spwck = {
-	SP_LAST, SP_NAME, -1, default_shadow_file, NULL
+	SP_LAST, SP_NAME, -1, default_shadow_file, NULL, check_shadow, check_shadow2
 };
 
 static regex_t name_regex;
 static int pedanticness = 0;
-
 
 static void
 usage() {
@@ -80,6 +89,29 @@ usage() {
 	exit(1);
 }
 
+static struct entry*
+find_id(struct entry *head, long id) {
+	struct entry *e;
+
+	for (e = head; e; e = e->next) {
+		if (e->id == id) {
+			return e;
+		}
+	}
+	return NULL;
+}
+
+static struct entry*
+find_name(struct entry *head, char *name) {
+	struct entry *e;
+
+	for (e = head; e; e = e->next) {
+		if (strcmp(e->name, name) == 0) {
+			return e;
+		}
+	}
+	return NULL;
+}
 
 static bool
 check_name(const char *name) {
@@ -121,8 +153,6 @@ parse_id(const char *id) {
 	return atol(id);
 }
 
-/* check passwd db, requires that groups and shadow has been checked,
-   to verify existance of shadow-password and primary group */
 static bool
 check_passwd(char **toks) {
 	struct checker *ck = &pwdck;
@@ -144,24 +174,6 @@ check_passwd(char **toks) {
 		ok = false;
 	}
 
-
-	if (passwd[0] == 'x' && passwd[1] == '\n') {
-		/* shadow must have corresponding entry */
-		bool s_ok = false;
-
-		for (e = spwck.head; !s_ok && e; e = e->next) {
-			if (strcmp(e->name, name) == 0) {
-				s_ok = true;
-			}
-		}
-
-		if (!s_ok) {
-			printf("%s: %s: missing from %s\n", ck->path, name, spwck.path);
-			ok = false;
-		}
-	}
-
-
 	if ((uid = parse_id(uid_s)) == (uid_t)-1) {
 		printf("%s: %s: invalid uid '%s'\n", ck->path, name, uid_s);
 		ok = false;
@@ -171,43 +183,28 @@ check_passwd(char **toks) {
 	if ((gid = parse_id(gid_s)) == (gid_t)-1) {
 		printf("%s: %s: invalid gid '%s'\n", ck->path, name, gid_s);
 		ok = false;
-	} else {
-		/* primary group must exist */
-		bool g_ok = false;
+	}
 
-		for (e = grpck.head; !g_ok && e; e = e->next) {
-			if (gid == e->id) {
-				g_ok = true;
-			}
-		}
-
-		if (!g_ok) {
-			printf("%s: %s: group '%d' missing from %s\n",
-			       ck->path, name, gid, grpck.path);
+	/* uniqueness */
+	if (pedanticness > 0) {
+		if ((e = find_id(pwdck.head, uid))) {
+			printf("%s: %s: shares uid '%d' with %s\n",
+			       ck->path, name, uid, e->name);
 			ok = false;
 		}
 	}
 
-
-	/* check for uid/name dups */
-	for (e = pwdck.head; e; e = e->next) {
-		if (pedanticness > 0) {
-			if (e->id == uid) {
-				printf("%s: %s: shares uid '%d' with %s\n",
-				       ck->path, name, uid, e->name);
-				ok = false;
-			}
-		}
-		if (strcmp(e->name, name) == 0) {
-			printf("%s: %s: duplicate name, uids: '%d' and '%ld'\n",
-			       ck->path, name, uid, e->id);
-			ok = false;
-		}
+	if ((e = find_name(pwdck.head, name))) {
+		printf("%s: %s: duplicate name, uids: '%d' and '%ld'\n",
+		       ck->path, name, uid, e->id);
+		ok = false;
 	}
+
 
 	/* FIXME ? */
 	(void)comment;
-	
+
+
 	/* check home */
 	if (home[0] == '\0') {
 		printf("%s: %s: empty home directory\n", ck->path, name);
@@ -245,7 +242,41 @@ check_passwd(char **toks) {
 	return ok;
 }
 
-/* verify shadow name and dates */
+static bool
+check_passwd2(char **toks) {
+	struct checker *ck = &pwdck;
+	struct entry *e;
+	bool ok = true;
+
+	char *name = toks[PW_NAME];
+	char *passwd = toks[PW_PASSWD]; 
+	char *gid_s = toks[PW_GID];
+	gid_t gid;
+
+	if (passwd[0] == 'x' && passwd[1] == '\0') {
+		/* shadow must have corresponding entry */
+		if (!find_name(spwck.head, name)) {
+			printf("%s: %s: missing from %s\n", ck->path, name, spwck.path);
+			ok = false;
+		}
+	}
+
+	if ((gid = parse_id(gid_s)) == (gid_t)-1) {
+		ok = false;
+	} else {
+		/* primary group must exist */
+		if (!find_id(grpck.head, gid)) {
+			printf("%s: %s: group '%d' missing from %s\n",
+			       ck->path, name, gid, grpck.path);
+			ok = false;
+		}
+	}
+
+	return ok;
+}
+
+
+/* verify shadow name, uniqueness and dates */
 static bool
 check_shadow(char **toks) {
 	struct checker *ck = &spwck;
@@ -264,6 +295,12 @@ check_shadow(char **toks) {
 		printf("%s: %s: illegal username.\n", ck->path, name);
 		ok = false;
 	}
+
+	if (find_name(spwck.head, name)) {
+		printf("%s: %s: duplicate entry\n", ck->path, name);
+		ok = false;
+	}
+
 
 #define SP_DIGITCHECK(i, var, msg)      do { (void)var;                    \
 	if (onlydigits(toks[(i)])) {                                       \
@@ -326,10 +363,26 @@ check_shadow(char **toks) {
 	return ok;
 }
 
-/* first pass at groups: verify name and gid */
+/* verify that users exist */
+static bool
+check_shadow2(char **toks) {
+	bool ok = true;
+	struct checker *ck = &spwck;
+	char *name = toks[SP_NAME];
+
+	if (!find_name(pwdck.head, toks[SP_NAME])) {
+		printf("%s: %s: user does not exist\n", ck->path, name);
+		ok = false;
+	}
+
+	return ok;
+}
+
+/* verify name and gid, and their uniqueness */
 static bool
 check_group(char **toks) {
 	struct checker *ck = &grpck;
+	struct entry *e;
 	bool ok = true;
 
 	char *name = toks[GR_NAME];
@@ -341,18 +394,27 @@ check_group(char **toks) {
 		ok = false;
 	}
 
-
 	if ((gid = parse_id(gid_s)) == (gid_t)-1) {
 		printf("%s: %s: invalid uid '%s'\n", ck->path, name, gid_s);
 		ok = false;
 	}
 
+	if ((e = find_name(grpck.head, name))) {
+		printf("%s: %s: duplicate name, gids: '%d' and '%ld'\n",
+		       ck->path, name, gid, e->id);
+		ok = false;
+	}
+
+	if ((e = find_id(grpck.head, gid))) {
+		printf("%s: %s: shares gid '%d' with '%s'\n",
+		       ck->path, name, gid, e->name);
+		ok = false;
+	}
 
 	return ok;
 }
 
-/* second pass at groups: ∨erify members, thus
-   passwd check must have been run before we can do this. */
+/* second pass at groups: ∨erify members */
 static bool
 check_group2(char **toks) {
 	struct checker *ck = &grpck;
@@ -374,16 +436,9 @@ check_group2(char **toks) {
 			printf("%s: %s: invalid user name '%s'\n", ck->path, name, tok);
 			ok = false;
 		} else {
-			struct entry *e;
-			bool u_ok = false;
-
-			for (e = pwdck.head; !u_ok && e; e = e->next) {
-				if (strcmp(e->name, tok) == 0) {
-					u_ok = true;
-				}
-			}
-			if (!u_ok) {
-				printf("%s: %s: member '%s' does not exist\n", ck->path, name, tok);
+			if (!find_name(pwdck.head, tok)) {
+				printf("%s: %s: member '%s' does not exist\n",
+				       ck->path, name, tok);
 				ok = false;
 			}
 		}
@@ -393,9 +448,8 @@ check_group2(char **toks) {
 	return ok;
 }
 
-
 static bool
-check(struct checker *ck, bool checker(char**), bool quiet) {
+check(struct checker *ck, enum pass pass) {
 	bool ok = true;
 	FILE *fp;
 	char *line = NULL;
@@ -403,7 +457,7 @@ check(struct checker *ck, bool checker(char**), bool quiet) {
 	ssize_t bytes;
 
 	if (!(fp = fopen(ck->path, "r"))) {
-		if (!quiet)
+		if (pass == PASS_FIRST)
 			fprintf(stderr, "%s: ERROR: fopen %s: %s\n",
 			        argv0, ck->path, strerror(errno));
 		return false;
@@ -425,7 +479,7 @@ check(struct checker *ck, bool checker(char**), bool quiet) {
 
 		toks = calloc(ck->toks, sizeof(char*));
 
-		for (tok = (char*)line, n = 0; tok; ++n, tok = sep ? sep + 1 : NULL) {
+		for (tok = line, n = 0; tok; ++n, tok = sep ? sep + 1 : NULL) {
 			if ((sep = strchr(tok, ':')))
 				*sep = '\0';
 
@@ -437,7 +491,7 @@ check(struct checker *ck, bool checker(char**), bool quiet) {
 			if (n < ck->toks) {
 				toks[n] = tok;
 			} else {
-				if (!quiet)
+				if (pass == PASS_FIRST)
 					printf("%s: %s: superfluous %luth token '%s'\n",
 					       ck->path, name, n, tok);
 				ent_ok = false;
@@ -445,23 +499,33 @@ check(struct checker *ck, bool checker(char**), bool quiet) {
 		}
 
 		if (n < ck->toks) {
-			if (!quiet)
+			if (pass == PASS_FIRST)
 				printf("%s: %s: missing %lu tokens\n",
 				       ck->path, name, ck->toks - n);
 			ent_ok = false;
 		}
 
 		if (ent_ok) {
-			struct entry *e;
+			if (pass == PASS_FIRST) {
+				struct entry *e;
 
-			if (!checker(toks))
-				ok = false;
+				if (!ck->checker1(toks)) {
+					ok = false;
+				}
 
-			e = malloc(sizeof(struct entry));
-			e->name = strdup(name);
-			e->id = id;
-			e->next = ck->head;
-			ck->head = e;
+				e = malloc(sizeof(struct entry));
+				e->name = strdup(name);
+				e->id = id;
+				e->next = ck->head;
+				ck->head = e;
+
+			}
+			else {
+				if (!ck->checker2(toks)) {
+					ok = false;
+				}
+			}
+
 		} else {
 			ok = false;
 		}
@@ -470,7 +534,7 @@ check(struct checker *ck, bool checker(char**), bool quiet) {
 
 	}
 	if (!feof(fp)) {
-		if (!quiet)
+		if (pass == PASS_FIRST)
 			fprintf(stderr, "%s: ERROR: getline %s: %s\n",
 			        argv0, ck->path, strerror(errno));
 		ok = false;
@@ -529,13 +593,17 @@ main(int argc, char *argv[]) {
 		return 1;
 	}
 
-	if (!check(&grpck, check_group, false))
+	if (!check(&grpck, PASS_FIRST))
 		err = 1;
-	if (!check(&spwck, check_shadow, false))
+	if (!check(&spwck, PASS_FIRST))
 		err = 1;
-	if (!check(&pwdck, check_passwd, false))
+	if (!check(&pwdck, PASS_FIRST))
 		err = 1;
-	if (!check(&grpck, check_group2, true))
+	if (!check(&grpck, PASS_SECOND))
+		err = 1;
+	if (!check(&spwck, PASS_SECOND))
+		err = 1;
+	if (!check(&pwdck, PASS_SECOND))
 		err = 1;
 
 	free_list(pwdck.head);
