@@ -174,11 +174,13 @@ check_passwd(char **toks) {
 		ok = false;
 	}
 
+	/* FIXME ? */
+	(void)passwd;
+
 	if ((uid = parse_id(uid_s)) == (uid_t)-1) {
 		printf("%s: %s: invalid uid '%s'\n", ck->path, name, uid_s);
 		ok = false;
 	}
-
 
 	if ((gid = parse_id(gid_s)) == (gid_t)-1) {
 		printf("%s: %s: invalid gid '%s'\n", ck->path, name, gid_s);
@@ -200,10 +202,8 @@ check_passwd(char **toks) {
 		ok = false;
 	}
 
-
 	/* FIXME ? */
 	(void)comment;
-
 
 	/* check home */
 	if (home[0] == '\0') {
@@ -245,7 +245,6 @@ check_passwd(char **toks) {
 static bool
 check_passwd2(char **toks) {
 	struct checker *ck = &pwdck;
-	struct entry *e;
 	bool ok = true;
 
 	char *name = toks[PW_NAME];
