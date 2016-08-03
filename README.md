@@ -1,18 +1,18 @@
 PSGCK(1)                    General Commands Manual                   PSGCK(1)
 
-NNAME
-     ppsgck - check passwd, shadow and group validity
+NAME
+     psgck - check passwd, shadow and group validity
 
-SSYNOPSIS
-     ppsgck [-v] [-n name-regex] [-p passwd file] [-g group file]
+SYNOPSIS
+     psgck [-v] [-n name-regex] [-p passwd file] [-g group file]
            [--s shadow file]
 
-DDESCRIPTION
-     ppsgck performs verification of the passwd, shadow and group files,
+DESCRIPTION
+     psgck performs verification of the passwd, shadow and group files,
      similar to pwck(8) and grpck(8).  But never changes any of the databases.
 
 
-OOPTIONS
+OPTIONS
      --v      Increase verbosity, and report non-errors. May be given multiple
              times.
 
@@ -24,13 +24,13 @@ OOPTIONS
              the default _^[a-z][0-9a-z]*$.  Be sure to include ^ and $.
 
 
-AAUTHOR
+AUTHOR
      Written by Lars Lindqvist.
 
-CCOPYRIGHT
+COPYRIGHT
      Copyright (C) 2016 Lars Lindqvist
 
-LLICENSE
+LICENSE
      Permission is hereby granted, free of charge, to any person obtaining a
      copy of this software and associated documentation files (the
      "Software"), to deal in the Software without restriction, including
@@ -42,7 +42,7 @@ LLICENSE
      The above copyright notice and this permission notice shall be included
      in all copies or substantial portions of the Software.
 
-WWARRANTY
+WARRANTY
      THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
      OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
      MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
@@ -52,7 +52,7 @@ WWARRANTY
      USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
-SSEE ALSE
+SEE ALSE
      pwck(8), grpck(8).
 
                                 August 3, 2016
